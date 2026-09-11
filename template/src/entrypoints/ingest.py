@@ -33,7 +33,10 @@ def _collect_documents(path: Path) -> list[Path]:
     if path.is_file():
         return [path]
     if path.is_dir():
-        files = sorted(p for p in path.rglob("*") if p.is_file())
+        files = sorted(
+            p for p in path.rglob("*")
+            if p.is_file() and not p.name.startswith(".")
+        )
         if not files:
             raise SystemExit(f"Error: no files found under {path}")
         return files
@@ -85,15 +88,20 @@ async def main() -> None:
     )
 
     documents = _collect_documents(root)
+    text_docs = [p for p in documents if p.suffix.lower() in _TEXT_SUFFIXES]
+    ocr_docs = [p for p in documents if p.suffix.lower() not in _TEXT_SUFFIXES]
 
     total_chunks = 0
-    for doc_path in documents:
-        if doc_path.suffix.lower() in _TEXT_SUFFIXES:
-            pipeline = plain_text_pipeline
-        else:
-            pipeline = ocr_pipeline
-        print(f"Processing: {doc_path}")
-        total_chunks += await pipeline.run(documents=[doc_path], use_checkpoint=False)
+    if text_docs:
+        print(f"Processing {len(text_docs)} text file(s)...")
+        total_chunks += await plain_text_pipeline.run(
+            documents=text_docs, use_checkpoint=False
+        )
+    if ocr_docs:
+        print(f"Processing {len(ocr_docs)} document/image file(s)...")
+        total_chunks += await ocr_pipeline.run(
+            documents=ocr_docs, use_checkpoint=False
+        )
 
     print(
         f"Successfully indexed {total_chunks} chunks from "
